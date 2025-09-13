@@ -104,19 +104,31 @@ class SmudgeTool {
       // 2. Calculate the distance from the fragment to the center line of the "pill"
       float dist_from_line = distance(p, closest_point_on_line);
 
+      float dist_from_end = distance(p, end);
+      
       // Cacluate the smudge vector.
       vec2 smudge_vec = end - start;
 
       // 4. Define pill radii based on drag length
       float drag_len = length(smudge_vec);
-      float inner_radius = drag_len * 0.2;
-      float outer_radius = drag_len * 1.2;
+      float inner_radius = drag_len * 0.5;
+      float outer_radius = drag_len * 1.5;
 
-      // 5. Calculate the falloff factor from the line center, using smoothstep
-      float falloff = 1.0 - smoothstep(inner_radius, outer_radius, dist_from_line);
+      if (dist_from_line > outer_radius) {
+        smudge_vec = vec2(0.0, 0.0);
+      } else if (dist_from_end > inner_radius) {
+        // gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        // return;
+        float dist_from_outer_pill = outer_radius - dist_from_line;
+        float dist_from_inner_circle = dist_from_end - inner_radius;
+        float falloff = dist_from_outer_pill / (dist_from_outer_pill + dist_from_inner_circle);
+        smudge_vec *= smoothstep(0.0, 1.0, falloff);
+      } else {
+        // Use the whole smudge amount.
+      }
 
       // 6. Calculate the source pixel position on the original image
-      vec2 displaced_pos = p - (smudge_vec * falloff);
+      vec2 displaced_pos = p - smudge_vec;
       vec2 final_uv = displaced_pos / u_resolution.xy;
 
       // 7. Draw the checkerboard from the new UV
