@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebGL Smudge Tool</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #1a202c;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    canvas {
+      border: 2px solid #4a5568;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      touch-action: none;
+      /* Prevents default touch actions like scrolling */
+    }
+
+    .info-box {
+      background-color: #2d3748;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+      text-align: center;
+      font-size: 0.875rem;
+      color: #a0aec0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="flex flex-col items-center p-4">
+    <h1 class="text-3xl font-bold mb-4 text-white">WebGL Smudge Tool</h1>
+    <canvas id="smudgeCanvas"></canvas>
+    <div class="info-box max-w-sm">
+      <p>Click and drag to smudge the checkerboard.</p>
+      <p>The smudge effect is powered by a real-time WebGL fragment shader.</p>
+      <p>Release the mouse button to freeze the effect.</p>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById('smudgeCanvas');
+      const gl = canvas.getContext('webgl');
+
+      if (!gl) {
+        alert('Your browser does not support WebGL. Please try a different browser.');
+        return;
+      }
+
+      // Set canvas size
+      function setCanvasSize() {
+        const size = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.7);
+        canvas.width = size;
+        canvas.height = size;
+      }
+      setCanvasSize();
+      window.addEventListener('resize', setCanvasSize);
+
+      // Shader source code
+      const vertexShaderSource = `
+                attribute vec2 a_position;
+                void main() {
+                    gl_Position = vec4(a_position, 0.0, 1.0);
+                }
+            `;
+
+      const fragmentShaderSource = `
+  precision mediump float;
+  uniform vec2 u_resolution;
+  uniform vec2 u_start;
+  uniform vec2 u_end;
+
+  // Helper to project a point 'p' onto a line segment from 'a' to 'b'
+  vec2 projectToLine(vec2 p, vec2 a, vec2 b) {
+      vec2 ap = p - a;
+      vec2 ab = b - a;
+      float ab2 = dot(ab, ab);
+      // Handle division by zero for a zero-length drag
+      if (ab2 == 0.0) {
+          return a;
+      }
+      float t = dot(ap, ab) / ab2;
+      // Clamp t to be within the line segment
+      t = clamp(t, 0.0, 1.0);
+      return a + ab * t;
+  }
+
+  void main() {
+      vec2 p = gl_FragCoord.xy;
+      vec2 start = u_start;
+      vec2 end = u_end;
+
+      // Checkerboard UV
+      vec2 checker_uv = p / u_resolution.xy;
+
+      // If no drag, just draw the checkerboard
+      if (distance(start, end) < 1.0) {
+          float check_color = step(0.5, mod(floor(checker_uv.x * 16.0) + floor(checker_uv.y * 16.0), 2.0));
+          gl_FragColor = vec4(vec3(check_color), 1.0);
+          return;
+      }
+
+      // --- Smudge Logic ---
+      
+      // 1. Find the point on the line segment closest to the current fragment
+      vec2 closest_point_on_line = projectToLine(p, start, end);
+      
+      // 2. Calculate the distance from the fragment to the center line of the "pill"
+      float dist_from_line = distance(p, closest_point_on_line);
+
+      // 3. Determine progress along the smudge line (0.0 at start, 1.0 at end)
+      vec2 smudge_vec = end - start;
+      float drag_len_squared = dot(smudge_vec, smudge_vec);
+      float t_along_line = 0.0;
+      if (drag_len_squared > 0.0) {
+          t_along_line = dot(p - start, smudge_vec) / drag_len_squared;
+      }
+      
+      // 4. Define pill radii based on drag length
+      float drag_len = length(smudge_vec);
+      float inner_radius = drag_len * 0.2;
+      float outer_radius = drag_len * 1.2;
+
+      // 5. Calculate the falloff factor from the line center, using smoothstep
+      float falloff = 1.0 - smoothstep(inner_radius, outer_radius, dist_from_line);
+
+      // 6. Calculate the final displacement factor.
+      // This is the key change. We clamp the t_along_line to ensure the smudge is contained.
+      float displacement_factor = clamp(t_along_line, 0.0, 1.0) * falloff;
+
+      // 7. Calculate the source pixel position on the original image
+      vec2 displaced_pos = p - smudge_vec * displacement_factor;
+      vec2 final_uv = displaced_pos / u_resolution.xy;
+
+      // 8. Draw the checkerboard from the new UV
+      float check_color = step(0.5, mod(floor(final_uv.x * 16.0) + floor(final_uv.y * 16.0), 2.0));
+      gl_FragColor = vec4(vec3(check_color), 1.0);
+  }
+            `;
+
+      // Helper functions to create and compile shaders
+      function createShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+
+      // Create program
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(program));
+        return null;
+      }
+
+      gl.useProgram(program);
+
+      // Look up attribute and uniform locations
+      const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
+      const resolutionUniformLocation = gl.getUniformLocation(program, 'u_resolution');
+      const startUniformLocation = gl.getUniformLocation(program, 'u_start');
+      const endUniformLocation = gl.getUniformLocation(program, 'u_end');
+
+      // Create a buffer for a full-screen quad
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      const positions = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1];
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+      // Set up vertex attribute pointer
+      gl.enableVertexAttribArray(positionAttributeLocation);
+      gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+      // Initial uniform values
+      let startPoint = { x: 0, y: 0 };
+      let endPoint = { x: 0, y: 0 };
+      let isDragging = false;
+
+      // Handle mouse events
+      canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        const rect = canvas.getBoundingClientRect();
+        startPoint = {
+          x: e.clientX - rect.left,
+          y: canvas.height - (e.clientY - rect.top)
+        };
+        endPoint = { ...startPoint };
+        updateSmudgePoints();
+        render();
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const rect = canvas.getBoundingClientRect();
+        endPoint = {
+          x: e.clientX - rect.left,
+          y: canvas.height - (e.clientY - rect.top)
+        };
+        updateSmudgePoints();
+        render();
+      });
+
+      canvas.addEventListener('mouseup', () => {
+        isDragging = false;
+        render();
+      });
+
+      // Handle touch events
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        startPoint = {
+          x: touch.clientX - rect.left,
+          y: canvas.height - (touch.clientY - rect.top)
+        };
+        endPoint = { ...startPoint };
+        updateSmudgePoints();
+        render();
+      });
+
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        endPoint = {
+          x: touch.clientX - rect.left,
+          y: canvas.height - (touch.clientY - rect.top)
+        };
+        updateSmudgePoints();
+        render();
+      });
+
+      canvas.addEventListener('touchend', () => {
+        isDragging = false;
+        render();
+      });
+
+      function updateSmudgePoints() {
+        gl.uniform2f(startUniformLocation, startPoint.x, startPoint.y);
+        gl.uniform2f(endUniformLocation, endPoint.x, endPoint.y);
+      }
+
+      // Main render loop
+      function render() {
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+
+      // Initial render
+      updateSmudgePoints();
+      render();
+    });
+  </script>
+</body>
+
+</html>

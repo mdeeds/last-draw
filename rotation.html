@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebGL Rotation Tool</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #1a202c;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    canvas {
+      border: 2px solid #4a5568;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      touch-action: none;
+      /* Prevents default touch actions like scrolling */
+    }
+
+    .info-box {
+      background-color: #2d3748;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+      text-align: center;
+      font-size: 0.875rem;
+      color: #a0aec0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="flex flex-col items-center p-4">
+    <h1 class="text-3xl font-bold mb-4 text-white">WebGL Rotation Tool</h1>
+    <canvas id="rotationCanvas"></canvas>
+    <div class="info-box max-w-sm">
+      <p>Click and drag to rotate the checkerboard.</p>
+      <p>The rotation is determined by the length and angle of your drag.</p>
+      <p>Release the mouse button to freeze the effect.</p>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById('rotationCanvas');
+      const gl = canvas.getContext('webgl');
+
+      if (!gl) {
+        alert('Your browser does not support WebGL. Please try a different browser.');
+        return;
+      }
+
+      // Set canvas size
+      function setCanvasSize() {
+        const size = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.7);
+        canvas.width = size;
+        canvas.height = size;
+      }
+      setCanvasSize();
+      window.addEventListener('resize', setCanvasSize);
+
+      // Shader source code
+      const vertexShaderSource = `
+                attribute vec2 a_position;
+                void main() {
+                    gl_Position = vec4(a_position, 0.0, 1.0);
+                }
+            `;
+
+      const fragmentShaderSource = `
+                precision mediump float;
+                uniform vec2 u_resolution;
+                uniform vec2 u_center;
+                uniform float u_radius;
+                uniform float u_angle;
+
+                const float PI = 3.14159265359;
+
+                mat2 rotate2d(float angle){
+                    return mat2(cos(angle), -sin(angle),
+                                sin(angle),  cos(angle));
+                }
+
+                void main() {
+                    vec2 p = gl_FragCoord.xy;
+                    
+                    // If no drag, just draw the checkerboard
+                    if (u_radius < 1.0) {
+                        vec2 uv = p / u_resolution.xy;
+                        float check_color = step(0.5, mod(floor(uv.x * 16.0) + floor(uv.y * 16.0), 2.0));
+                        gl_FragColor = vec4(vec3(check_color), 1.0);
+                        return;
+                    }
+
+                    // --- Rotation Logic ---
+
+                    // Calculate distance from the center point
+                    float dist_from_center = distance(p, u_center);
+                    
+                    // Calculate the dynamic outer radius based on the magnitude of the angle
+                    float normalized_angle = abs(u_angle) / PI;
+                    float outer_radius_multiplier = 1.0 + normalized_angle * 2.0;
+                    float outer_radius = u_radius * outer_radius_multiplier;
+
+                    // Determine the rotation amount based on distance from center
+                    float rotate_factor = 1.0 - smoothstep(u_radius, outer_radius, dist_from_center);
+                    float final_angle = u_angle * rotate_factor;
+
+                    // Translate the point to be relative to the center
+                    vec2 p_relative = p - u_center;
+
+                    // Apply the rotation
+                    vec2 rotated_p = rotate2d(final_angle) * p_relative;
+
+                    // Translate the point back to its original coordinate system
+                    vec2 final_p = rotated_p + u_center;
+                    
+                    // Calculate final UV from the rotated position
+                    vec2 final_uv = final_p / u_resolution.xy;
+
+                    // Draw the checkerboard from the new UV
+                    float check_color = step(0.5, mod(floor(final_uv.x * 16.0) + floor(final_uv.y * 16.0), 2.0));
+                    gl_FragColor = vec4(vec3(check_color), 1.0);
+                }
+            `;
+
+      // Helper functions to create and compile shaders
+      function createShader(gl, type, source) {
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error('An error occurred compiling the shaders: ' + gl.getShaderInfoLog(shader));
+          gl.deleteShader(shader);
+          return null;
+        }
+        return shader;
+      }
+
+      // Create program
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Unable to initialize the shader program: ' + gl.getProgramInfoLog(program));
+        return null;
+      }
+
+      gl.useProgram(program);
+
+      // Look up attribute and uniform locations
+      const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
+      const resolutionUniformLocation = gl.getUniformLocation(program, 'u_resolution');
+      const centerUniformLocation = gl.getUniformLocation(program, 'u_center');
+      const radiusUniformLocation = gl.getUniformLocation(program, 'u_radius');
+      const angleUniformLocation = gl.getUniformLocation(program, 'u_angle');
+
+      // Create a buffer for a full-screen quad
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      const positions = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1];
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+      // Set up vertex attribute pointer
+      gl.enableVertexAttribArray(positionAttributeLocation);
+      gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+
+      // Initial uniform values
+      let centerPoint = { x: 0, y: 0 };
+      let dragEndPoint = { x: 0, y: 0 };
+      let isDragging = false;
+      let currentRadius = 0;
+      let currentAngle = 0;
+
+      // Handle mouse events
+      canvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        const rect = canvas.getBoundingClientRect();
+        centerPoint = {
+          x: e.clientX - rect.left,
+          y: canvas.height - (e.clientY - rect.top)
+        };
+        dragEndPoint = { ...centerPoint };
+        updateRotationPoints();
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const rect = canvas.getBoundingClientRect();
+        dragEndPoint = {
+          x: e.clientX - rect.left,
+          y: canvas.height - (e.clientY - rect.top)
+        };
+        updateRotationPoints();
+        render();
+      });
+
+      canvas.addEventListener('mouseup', () => {
+        isDragging = false;
+      });
+
+      // Handle touch events
+      canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        centerPoint = {
+          x: touch.clientX - rect.left,
+          y: canvas.height - (touch.clientY - rect.top)
+        };
+        dragEndPoint = { ...centerPoint };
+        updateRotationPoints();
+      });
+
+      canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        const rect = canvas.getBoundingClientRect();
+        dragEndPoint = {
+          x: touch.clientX - rect.left,
+          y: canvas.height - (touch.clientY - rect.top)
+        };
+        updateRotationPoints();
+        render();
+      });
+
+      canvas.addEventListener('touchend', () => {
+        isDragging = false;
+      });
+
+      function updateRotationPoints() {
+        const dx = dragEndPoint.x - centerPoint.x;
+        const dy = dragEndPoint.y - centerPoint.y;
+        currentRadius = Math.sqrt(dx * dx + dy * dy);
+        currentAngle = Math.atan2(dy, dx);
+
+        gl.uniform2f(centerUniformLocation, centerPoint.x, centerPoint.y);
+        gl.uniform1f(radiusUniformLocation, currentRadius);
+        gl.uniform1f(angleUniformLocation, currentAngle);
+      }
+
+      // Main render loop
+      function render() {
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+
+      // Initial render
+      updateRotationPoints();
+      render();
+    });
+  </script>
+</body>
+
+</html>

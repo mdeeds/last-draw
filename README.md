@@ -1,2 +1,8 @@
 # last-draw
-An AI-Powered Drawing App
+The last drawing tool you will ever need.
+
+## Gemini Powered
+
+## Human Tweakable
+
+## Super-Resolution
