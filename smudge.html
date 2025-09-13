@@ -121,14 +121,9 @@
       // 2. Calculate the distance from the fragment to the center line of the "pill"
       float dist_from_line = distance(p, closest_point_on_line);
 
-      // 3. Determine progress along the smudge line (0.0 at start, 1.0 at end)
+      // Cacluate the smudge vector.
       vec2 smudge_vec = end - start;
-      float drag_len_squared = dot(smudge_vec, smudge_vec);
-      float t_along_line = 0.0;
-      if (drag_len_squared > 0.0) {
-          t_along_line = dot(p - start, smudge_vec) / drag_len_squared;
-      }
-      
+
       // 4. Define pill radii based on drag length
       float drag_len = length(smudge_vec);
       float inner_radius = drag_len * 0.2;
@@ -137,15 +132,11 @@
       // 5. Calculate the falloff factor from the line center, using smoothstep
       float falloff = 1.0 - smoothstep(inner_radius, outer_radius, dist_from_line);
 
-      // 6. Calculate the final displacement factor.
-      // This is the key change. We clamp the t_along_line to ensure the smudge is contained.
-      float displacement_factor = clamp(t_along_line, 0.0, 1.0) * falloff;
-
-      // 7. Calculate the source pixel position on the original image
-      vec2 displaced_pos = p - smudge_vec * displacement_factor;
+      // 6. Calculate the source pixel position on the original image
+      vec2 displaced_pos = p - (smudge_vec * falloff);
       vec2 final_uv = displaced_pos / u_resolution.xy;
 
-      // 8. Draw the checkerboard from the new UV
+      // 7. Draw the checkerboard from the new UV
       float check_color = step(0.5, mod(floor(final_uv.x * 16.0) + floor(final_uv.y * 16.0), 2.0));
       gl_FragColor = vec4(vec3(check_color), 1.0);
   }
@@ -180,10 +171,16 @@
       gl.useProgram(program);
 
       // Look up attribute and uniform locations
-      const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
-      const resolutionUniformLocation = gl.getUniformLocation(program, 'u_resolution');
-      const startUniformLocation = gl.getUniformLocation(program, 'u_start');
-      const endUniformLocation = gl.getUniformLocation(program, 'u_end');
+      const locations = {
+        attributes: {
+          position: gl.getAttribLocation(program, 'a_position'),
+        },
+        uniforms: {
+          resolution: gl.getUniformLocation(program, 'u_resolution'),
+          start: gl.getUniformLocation(program, 'u_start'),
+          end: gl.getUniformLocation(program, 'u_end'),
+        },
+      };
 
       // Create a buffer for a full-screen quad
       const positionBuffer = gl.createBuffer();
@@ -192,8 +189,8 @@
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
       // Set up vertex attribute pointer
-      gl.enableVertexAttribArray(positionAttributeLocation);
-      gl.vertexAttribPointer(positionAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(locations.attributes.position);
+      gl.vertexAttribPointer(locations.attributes.position, 2, gl.FLOAT, false, 0, 0);
 
       // Initial uniform values
       let startPoint = { x: 0, y: 0 };
@@ -263,8 +260,8 @@
       });
 
       function updateSmudgePoints() {
-        gl.uniform2f(startUniformLocation, startPoint.x, startPoint.y);
-        gl.uniform2f(endUniformLocation, endPoint.x, endPoint.y);
+        gl.uniform2f(locations.uniforms.start, startPoint.x, startPoint.y);
+        gl.uniform2f(locations.uniforms.end, endPoint.x, endPoint.y);
       }
 
       // Main render loop
@@ -273,7 +270,7 @@
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT);
 
-        gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+        gl.uniform2f(locations.uniforms.resolution, gl.canvas.width, gl.canvas.height);
 
         gl.drawArrays(gl.TRIANGLES, 0, 6);
       }
