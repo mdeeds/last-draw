@@ -134,20 +134,6 @@ export class TwoPointTool {
 
   initialize() {
     this.createShaders();
-
-    // Set canvas size
-    const setCanvasSize = () => {
-      const size = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.7);
-      this.canvas.width = size;
-      this.canvas.height = size;
-      // When the size changes, we need to re-render
-      if (!!this.gl && !!this.locations) {
-        this.render();
-      }
-    };
-    setCanvasSize();
-    window.addEventListener('resize', () => setCanvasSize());
-
     // Initial uniform values
     /** @type {Point} */
     this.startPoint = { x: 0, y: 0 };

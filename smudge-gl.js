@@ -98,5 +98,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
   const canvas = /** @type {HTMLCanvasElement!} */ (maybeCanvas);
+  canvas.width = 1024;
+  canvas.height = canvas.width;
+
   new SmudgeTool(canvas);
 });
