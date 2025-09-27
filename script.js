@@ -1,5 +1,6 @@
 import { SmudgeTool } from './smudge-gl.js';
 import { RotationTool } from './rotation-gl.js';
+import { LineTool } from './line-gl.js';
 
 function createBackground() {
   const tempCanvas = document.createElement('canvas');
@@ -33,6 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
   canvas.height = canvas.width;
 
 
-  const tool = new RotationTool(canvas);
+  const tool = new LineTool(canvas);
   tool.setBackgroundTexture(createBackground());
 });
