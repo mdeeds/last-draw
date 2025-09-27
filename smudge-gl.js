@@ -9,10 +9,8 @@ class SmudgeTool extends TwoPointTool {
    * @param {HTMLCanvasElement!} canvas 
    */
   constructor(canvas) {
-    super(canvas);
-  }
-
-  fragmentShaderSource = `
+    super(canvas,
+      `
   precision mediump float;
   uniform vec2 u_resolution;
   uniform vec2 u_start;
@@ -87,7 +85,8 @@ class SmudgeTool extends TwoPointTool {
       float check_color = step(0.5, mod(floor(final_uv.x * 16.0) + floor(final_uv.y * 16.0), 2.0));
       gl_FragColor = vec4(vec3(check_color), 1.0);
   }
-            `;
+            `);
+  }
 }
 
 

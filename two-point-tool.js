@@ -13,8 +13,10 @@ export class TwoPointTool {
   gl;
 
 
-  constructor(canvas) {
+  constructor(canvas, fragmentShaderSource) {
     this.canvas = canvas;
+    this.fragmentShaderSource = fragmentShaderSource;
+
     const maybeGl = canvas.getContext('webgl');
     if (!maybeGl) {
       throw new Error('WebGL not supported');
