@@ -187,15 +187,23 @@ export class TwoPointTool {
     if (!this.isDragging) return;
     this.isDragging = false;
 
-    // Commit the changes by swapping the textures
+    // 1. Render effect to target texture
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
+    this.gl.activeTexture(this.gl.TEXTURE0);
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
+    this.gl.uniform1i(this.locations.uniforms.texture, 0);
+    this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+
+
+    // 2. Commit the changes by swapping the textures
     [this.backgroundTexture, this.targetTexture] = [this.targetTexture, this.backgroundTexture];
 
-    // Update the framebuffer to point to the new target texture
+    // 3. Update the framebuffer to point to the new target texture
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
     this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTexture, 0);
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
 
-    // Reset points to stop the smudge effect
+    // 4. Reset points to stop the smudge effect
     this.startPoint = { x: 0, y: 0 };
     this.endPoint = { x: 0, y: 0 };
     this.updateSmudgePoints();
@@ -217,32 +225,12 @@ export class TwoPointTool {
 
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
-    if (this.isDragging) {
-      // 1. Render effect to target texture
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-      this.gl.activeTexture(this.gl.TEXTURE0);
-      this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
-      this.gl.uniform1i(this.locations.uniforms.texture, 0);
-      this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
-
-      // 2. Render target texture to canvas
-      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-      this.gl.activeTexture(this.gl.TEXTURE0);
-      this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
-      this.gl.uniform1i(this.locations.uniforms.texture, 0);
-      this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
-    } else {
-      // Not dragging, just render the background texture to the canvas
-      if (this.backgroundTexture) {
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-        this.gl.activeTexture(this.gl.TEXTURE0);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
-        this.gl.uniform1i(this.locations.uniforms.texture, 0);
-        this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
-      }
-    }
-
-
+    // Render target texture to canvas
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    this.gl.activeTexture(this.gl.TEXTURE0);
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
+    this.gl.uniform1i(this.locations.uniforms.texture, 0);
+    this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
   }
 
   /**
