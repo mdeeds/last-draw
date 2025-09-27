@@ -12,6 +12,7 @@ class SmudgeTool extends TwoPointTool {
     super(canvas,
       `
   precision mediump float;
+  uniform sampler2D u_texture;
   uniform vec2 u_resolution;
   uniform vec2 u_start;
   uniform vec2 u_end;
@@ -36,13 +37,10 @@ class SmudgeTool extends TwoPointTool {
       vec2 start = u_start;
       vec2 end = u_end;
 
-      // Checkerboard UV
-      vec2 checker_uv = p / u_resolution.xy;
-
       // If no drag, just draw the checkerboard
       if (distance(start, end) < 1.0) {
-          float check_color = step(0.5, mod(floor(checker_uv.x * 16.0) + floor(checker_uv.y * 16.0), 2.0));
-          gl_FragColor = vec4(vec3(check_color), 1.0);
+          vec2 uv = p / u_resolution.xy;
+          gl_FragColor = texture2D(u_texture, uv);
           return;
       }
 
@@ -81,12 +79,30 @@ class SmudgeTool extends TwoPointTool {
       vec2 displaced_pos = p - smudge_vec;
       vec2 final_uv = displaced_pos / u_resolution.xy;
 
-      // 7. Draw the checkerboard from the new UV
-      float check_color = step(0.5, mod(floor(final_uv.x * 16.0) + floor(final_uv.y * 16.0), 2.0));
-      gl_FragColor = vec4(vec3(check_color), 1.0);
+      // 7. Sample the texture from the new UV
+      gl_FragColor = texture2D(u_texture, final_uv);
   }
             `);
   }
+}
+
+function createBackground() {
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = 1024;
+  tempCanvas.height = 1024;
+  const ctx = tempCanvas.getContext('2d');
+  if (!ctx) {
+    throw new Error("Unable to create 2D context.");
+  }
+  const colors = ['red', 'green', 'blue', 'yellow'];
+  const tileSize = tempCanvas.width / 16;
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      ctx.fillStyle = colors[(x + y) % 4];
+      ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+    }
+  }
+  return tempCanvas;
 }
 
 
@@ -101,5 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
   canvas.width = 1024;
   canvas.height = canvas.width;
 
-  new SmudgeTool(canvas);
+
+  const tool = new SmudgeTool(canvas);
+  tool.setBackgroundTexture(createBackground());
 });

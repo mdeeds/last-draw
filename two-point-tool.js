@@ -2,7 +2,7 @@
  * @typedef {{x: number, y: number}} Point
  * @typedef {{
  *   attributes: { position: number },
- *   uniforms: { resolution: WebGLUniformLocation | null, start: WebGLUniformLocation | null, end: WebGLUniformLocation | null }
+ *   uniforms: { resolution: WebGLUniformLocation | null, start: WebGLUniformLocation | null, end: WebGLUniformLocation | null, texture?: WebGLUniformLocation | null }
  * }} WebGLLocations
  */
 
@@ -11,6 +11,8 @@ export class TwoPointTool {
   canvas;
   /** @type {WebGLRenderingContext!} */
   gl;
+  /** @type {boolean} */
+  isDragging = false;
 
 
   constructor(canvas, fragmentShaderSource) {
@@ -24,7 +26,7 @@ export class TwoPointTool {
     this.gl = /** @type {WebGLRenderingContext} */ (maybeGl);
 
     this.initialize();
-
+    this.backgroundTexture = undefined;
   }
 
   // Helper functions to create and compile shaders
@@ -87,6 +89,7 @@ export class TwoPointTool {
         resolution: this.gl.getUniformLocation(program, 'u_resolution'),
         start: this.gl.getUniformLocation(program, 'u_start'),
         end: this.gl.getUniformLocation(program, 'u_end'),
+        texture: this.gl.getUniformLocation(program, 'u_texture'),
       },
     };
 
@@ -139,68 +142,52 @@ export class TwoPointTool {
     this.startPoint = { x: 0, y: 0 };
     /** @type {Point} */
     this.endPoint = { x: 0, y: 0 };
-    let isDragging = false;
 
     // Handle mouse events
-    /** @param {MouseEvent} e */
-    this.canvas.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      this.startPoint = this.getCanvasPointFromEvent(e);
-      this.endPoint = { ...this.startPoint };
-      this.updateSmudgePoints();
-      this.render();
-    });
+    this.canvas.addEventListener('mousedown', (e) => this.onDragStart(e));
+    this.canvas.addEventListener('mousemove', (e) => this.onDragMove(e));
+    this.canvas.addEventListener('mouseup', () => this.onDragEnd());
+    this.canvas.addEventListener('mouseleave', () => this.onDragEnd()); // Handle mouse leaving canvas
 
-    /** @param {MouseEvent} e */
-    this.canvas.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      this.endPoint = this.getCanvasPointFromEvent(e);
-      this.updateSmudgePoints();
-      this.render();
-    });
-
-    this.canvas.addEventListener('mouseup', () => {
-      isDragging = false;
-      // Reset points to stop the smudge effect
-      this.startPoint = { x: 0, y: 0 };
-      this.endPoint = { x: 0, y: 0 };
-      this.updateSmudgePoints();
-      this.render();
-    });
-
-    // Handle touch events
-    /** @param {TouchEvent} e */
-    this.canvas.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      isDragging = true;
-      const touch = e.touches[0];
-      this.startPoint = this.getCanvasPointFromEvent(touch);
-      this.endPoint = { ...this.startPoint };
-      this.updateSmudgePoints();
-      this.render();
-    });
-
-    /** @param {TouchEvent} e */
-    this.canvas.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      if (!isDragging) return;
-      const touch = e.touches[0];
-      this.endPoint = this.getCanvasPointFromEvent(touch);
-      this.updateSmudgePoints();
-      this.render();
-    });
-
-    this.canvas.addEventListener('touchend', () => {
-      isDragging = false;
-      // Reset points to stop the smudge effect
-      this.startPoint = { x: 0, y: 0 };
-      this.endPoint = { x: 0, y: 0 };
-      this.updateSmudgePoints();
-      this.render();
-    });
+    this.canvas.addEventListener('touchstart', (e) => this.onDragStart(e));
+    this.canvas.addEventListener('touchmove', (e) => this.onDragMove(e));
+    this.canvas.addEventListener('touchend', () => this.onDragEnd());
+    this.canvas.addEventListener('touchcancel', () => this.onDragEnd()); // Handle touch interruption
 
     // Main render loop
     // Initial render
+    this.updateSmudgePoints();
+    this.render();
+  }
+
+  /** @param {MouseEvent | TouchEvent} e */
+  onDragStart(e) {
+    e.preventDefault();
+    this.isDragging = true;
+    const pointSource = e instanceof MouseEvent ? e : e.touches[0];
+    this.startPoint = this.getCanvasPointFromEvent(pointSource);
+    this.endPoint = { ...this.startPoint };
+    this.updateSmudgePoints();
+    this.render();
+  }
+
+  /** @param {MouseEvent | TouchEvent} e */
+  onDragMove(e) {
+    if (!this.isDragging) return;
+    e.preventDefault();
+    const pointSource = e instanceof MouseEvent ? e : e.touches[0];
+    this.endPoint = this.getCanvasPointFromEvent(pointSource);
+    this.updateSmudgePoints();
+    this.render();
+  }
+
+  onDragEnd() {
+    if (!this.isDragging) return;
+    this.isDragging = false;
+
+    // Reset points to stop the smudge effect
+    this.startPoint = { x: 0, y: 0 };
+    this.endPoint = { x: 0, y: 0 };
     this.updateSmudgePoints();
     this.render();
   }
@@ -218,6 +205,46 @@ export class TwoPointTool {
       this.gl.canvas.width, this.gl.canvas.height);
 
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+
+    // Re-bind the texture before drawing. This is good practice in case other
+    // tools or render passes change the texture bindings.
+    if (this.backgroundTexture) {
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
+      this.gl.uniform1i(this.locations.uniforms.texture, 0);
+    }
+  }
+
+  /**
+   * Creates a WebGL texture from a canvas and stores it.
+   * @param {HTMLCanvasElement} canvas The source canvas for the texture.
+   */
+  setBackgroundTexture(canvas) {
+    const gl = this.gl;
+
+    // If a texture already exists, delete it to free up GPU memory.
+    if (this.backgroundTexture) {
+      gl.deleteTexture(this.backgroundTexture);
+    }
+
+    this.backgroundTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.backgroundTexture);
+
+    // Upload the canvas image to the texture.
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+
+    // Set texture parameters for rendering.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    gl.bindTexture(gl.TEXTURE_2D, null); // Unbind the texture.
+
+    // Tell the shader to use texture unit 0 for u_texture
+    this.gl.activeTexture(this.gl.TEXTURE0);
+    this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
+    this.gl.uniform1i(this.locations.uniforms.texture, 0);
+    this.render();
   }
 
 }
