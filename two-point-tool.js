@@ -216,23 +216,28 @@ export class TwoPointTool {
       this.gl.canvas.width, this.gl.canvas.height);
 
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
-    this.gl.uniform1i(this.locations.uniforms.texture, 0);
 
     if (this.isDragging) {
       // 1. Render effect to target texture
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
+      this.gl.activeTexture(this.gl.TEXTURE0);
       this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
+      this.gl.uniform1i(this.locations.uniforms.texture, 0);
       this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
 
       // 2. Render target texture to canvas
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-      this.gl.bindTexture(this.gl.TEXTURE_2D, this.targetTexture);
+      this.gl.activeTexture(this.gl.TEXTURE0);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
+      this.gl.uniform1i(this.locations.uniforms.texture, 0);
       this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
     } else {
       // Not dragging, just render the background texture to the canvas
       if (this.backgroundTexture) {
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+        this.gl.activeTexture(this.gl.TEXTURE0);
         this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
+        this.gl.uniform1i(this.locations.uniforms.texture, 0);
         this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
       }
     }
