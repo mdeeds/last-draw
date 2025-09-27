@@ -27,6 +27,8 @@ export class TwoPointTool {
 
     this.initialize();
     this.backgroundTexture = undefined;
+    this.targetTexture = undefined;
+    this.framebuffer = undefined;
   }
 
   // Helper functions to create and compile shaders
@@ -185,11 +187,20 @@ export class TwoPointTool {
     if (!this.isDragging) return;
     this.isDragging = false;
 
+    // Commit the changes by swapping the textures
+    [this.backgroundTexture, this.targetTexture] = [this.targetTexture, this.backgroundTexture];
+
+    // Update the framebuffer to point to the new target texture
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
+    this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTexture, 0);
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+
     // Reset points to stop the smudge effect
     this.startPoint = { x: 0, y: 0 };
     this.endPoint = { x: 0, y: 0 };
     this.updateSmudgePoints();
     this.render();
+
   }
 
   render() {
@@ -205,14 +216,28 @@ export class TwoPointTool {
       this.gl.canvas.width, this.gl.canvas.height);
 
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.gl.uniform1i(this.locations.uniforms.texture, 0);
 
-    // Re-bind the texture before drawing. This is good practice in case other
-    // tools or render passes change the texture bindings.
-    if (this.backgroundTexture) {
-      this.gl.activeTexture(this.gl.TEXTURE0);
+    if (this.isDragging) {
+      // 1. Render effect to target texture
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
       this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
-      this.gl.uniform1i(this.locations.uniforms.texture, 0);
+      this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+
+      // 2. Render target texture to canvas
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+      this.gl.bindTexture(this.gl.TEXTURE_2D, this.targetTexture);
+      this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    } else {
+      // Not dragging, just render the background texture to the canvas
+      if (this.backgroundTexture) {
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
+        this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+      }
     }
+
+
   }
 
   /**
@@ -222,28 +247,43 @@ export class TwoPointTool {
   setBackgroundTexture(canvas) {
     const gl = this.gl;
 
-    // If a texture already exists, delete it to free up GPU memory.
+    // Dispose of old resources if they exist
     if (this.backgroundTexture) {
       gl.deleteTexture(this.backgroundTexture);
     }
+    if (this.targetTexture) {
+      gl.deleteTexture(this.targetTexture);
+    }
+    if (this.framebuffer) {
+      gl.deleteFramebuffer(this.framebuffer);
+    }
 
-    this.backgroundTexture = gl.createTexture();
+    const createAndSetupTexture = () => {
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.canvas.width, gl.canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return texture;
+    };
+
+    this.backgroundTexture = createAndSetupTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.backgroundTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas); // Upload image
 
-    // Upload the canvas image to the texture.
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+    this.targetTexture = createAndSetupTexture();
 
-    // Set texture parameters for rendering.
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // Create and configure the framebuffer
+    this.framebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.targetTexture, 0);
 
-    gl.bindTexture(gl.TEXTURE_2D, null); // Unbind the texture.
+    // Unbind everything
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
     // Tell the shader to use texture unit 0 for u_texture
-    this.gl.activeTexture(this.gl.TEXTURE0);
-    this.gl.bindTexture(this.gl.TEXTURE_2D, this.backgroundTexture);
-    this.gl.uniform1i(this.locations.uniforms.texture, 0);
     this.render();
   }
 
