@@ -19,7 +19,7 @@ export class TwoPointTool {
     this.canvas = canvas;
     this.fragmentShaderSource = fragmentShaderSource;
 
-    const maybeGl = canvas.getContext('webgl');
+    const maybeGl = canvas.getContext('webgl2');
     if (!maybeGl) {
       throw new Error('WebGL not supported');
     }
@@ -55,11 +55,11 @@ export class TwoPointTool {
 
   createShaders() {
     // Shader source code
-    const vertexShaderSource = `
-                attribute vec2 a_position;
-                void main() {
-                    gl_Position = vec4(a_position, 0.0, 1.0);
-                }
+    const vertexShaderSource = `#version 300 es
+in vec2 a_position;
+void main() {
+    gl_Position = vec4(a_position, 0.0, 1.0);
+}
             `;
 
     if (!this.fragmentShaderSource) {

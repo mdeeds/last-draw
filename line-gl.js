@@ -8,12 +8,15 @@ export class LineTool extends TwoPointTool {
    * @param {HTMLCanvasElement!} canvas 
    */
   constructor(canvas) {
-    const fragmentShaderSource = `
+    const fragmentShaderSource = `#version 300 es
+
 precision mediump float;
 uniform sampler2D u_texture;
 uniform vec2 u_resolution;
 uniform vec2 u_start;
 uniform vec2 u_end;
+
+out vec4 fragColor;
 
 // Helper to project a point 'p' onto a line segment from 'a' to 'b'
 vec2 projectToLine(vec2 p, vec2 a, vec2 b) {
@@ -36,7 +39,7 @@ void main() {
 
     // If no drag, just draw the texture
     if (distance(u_start, u_end) < 1.0) {
-        gl_FragColor = texture2D(u_texture, uv);
+        fragColor = texture(u_texture, uv);
         return;
     }
 
@@ -46,7 +49,7 @@ void main() {
     float line_width = 3.0;
     float blend_size = 1.0;
     float alpha = 1.0 - smoothstep(line_width - blend_size, line_width + blend_size, dist_from_line);
-    gl_FragColor = mix(texture2D(u_texture, uv), vec4(0.0, 0.0, 0.0, 1.0), alpha);
+    fragColor = mix(texture(u_texture, uv), vec4(0.0, 0.0, 0.0, 1.0), alpha);
 }
     `;
     super(canvas, fragmentShaderSource);

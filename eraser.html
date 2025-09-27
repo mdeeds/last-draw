@@ -56,7 +56,7 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const canvas = document.getElementById('blurCanvas');
-      const gl = canvas.getContext('webgl');
+      const gl = canvas.getContext('webgl2');
 
       if (!gl) {
         alert('Your browser does not support WebGL. Please try a different browser.');
@@ -74,31 +74,34 @@
 
       // Shader source code
       const vertexShaderSource = `
-                attribute vec2 a_position;
+                #version 300 es
+                in vec2 a_position;
                 void main() {
                     gl_Position = vec4(a_position, 0.0, 1.0);
                 }
             `;
 
       const fragmentShaderSource = `
+                #version 300 es
                 precision mediump float;
                 uniform sampler2D u_main_texture;
                 uniform vec2 u_resolution;
                 uniform vec2 u_start;
                 uniform vec2 u_end;
                 uniform float u_drag_length;
-                uniform bool u_is_dragging;
+                uniform float u_is_dragging; // Use float for bool
+
+                out vec4 fragColor;
 
                 const float PI = 3.14159265359;
                 const int MAX_BLUR_RADIUS = 30; // Max radius to prevent excessive sampling
-                
                 void main() {
                     vec2 p = gl_FragCoord.xy;
                     
-                    vec4 final_color = texture2D(u_main_texture, p / u_resolution);
+                    vec4 final_color = texture(u_main_texture, p / u_resolution);
 
-                    if (!u_is_dragging) {
-                        gl_FragColor = final_color;
+                    if (u_is_dragging < 0.5) { // Check float as bool
+                        fragColor = final_color;
                         return;
                     }
 
@@ -118,7 +121,7 @@
                     float blur_radius = blur_radius_factor * inner_radius;
 
                     if (blur_radius < 1.0) {
-                         gl_FragColor = final_color;
+                         fragColor = final_color;
                          return;
                     }
 
@@ -139,7 +142,7 @@
                             float weight = weight_x * weight_y;
                             
                             // Get the color of the neighboring pixel
-                            vec4 sampled_color = texture2D(u_main_texture, (p + offset) / u_resolution);
+                            vec4 sampled_color = texture(u_main_texture, (p + offset) / u_resolution);
                             
                             total_color += sampled_color * weight;
                             total_weight += weight;
@@ -151,7 +154,7 @@
                     // --- Lightening Logic ---
                     // Blend the blurred color with white based on the blur radius factor
                     float lighten_factor = blur_radius_factor * 0.5;
-                    gl_FragColor = mix(blurred_color, vec4(1.0, 1.0, 1.0, 1.0), lighten_factor);
+                    fragColor = mix(blurred_color, vec4(1.0, 1.0, 1.0, 1.0), lighten_factor);
                 }
             `;
 

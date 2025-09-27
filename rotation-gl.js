@@ -9,12 +9,15 @@ export class RotationTool extends TwoPointTool {
    * @param {HTMLCanvasElement!} canvas 
    */
   constructor(canvas) {
-    const fragmentShaderSource = `
+    const fragmentShaderSource = `#version 300 es
+
 precision mediump float;
 uniform sampler2D u_texture;
 uniform vec2 u_resolution;
 uniform vec2 u_start;
 uniform vec2 u_end;
+
+out vec4 fragColor;
 
 const float PI = 3.14159265359;
 
@@ -40,7 +43,7 @@ void main() {
     
     // If no drag, just pass through the texture
     if (radius < 1.0) {
-      gl_FragColor = texture2D(u_texture, p / u_resolution.xy);
+      fragColor = texture(u_texture, p / u_resolution.xy);
       return;
     }
 
@@ -71,7 +74,7 @@ void main() {
     vec2 final_uv = final_p / u_resolution.xy;
 
     // Draw the checkerboard from the new UV
-    gl_FragColor = texture2D(u_texture, final_uv);
+    fragColor = texture(u_texture, final_uv);
 }
     `;
     super(canvas, fragmentShaderSource);

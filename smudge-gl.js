@@ -8,12 +8,15 @@ export class SmudgeTool extends TwoPointTool {
    * @param {HTMLCanvasElement!} canvas 
    */
   constructor(canvas) {
-    const fragmentShaderSource = `
+    const fragmentShaderSource = `#version 300 es
+
 precision mediump float;
 uniform sampler2D u_texture;
 uniform vec2 u_resolution;
 uniform vec2 u_start;
 uniform vec2 u_end;
+
+out vec4 fragColor;
 
 // Helper to project a point 'p' onto a line segment from 'a' to 'b'
 vec2 projectToLine(vec2 p, vec2 a, vec2 b) {
@@ -38,7 +41,7 @@ void main() {
     // If no drag, just draw the texture
     if (distance(start, end) < 1.0) {
         vec2 uv = p / u_resolution.xy;
-        gl_FragColor = texture2D(u_texture, uv);
+        fragColor = texture(u_texture, uv);
         return;
     }
 
@@ -76,7 +79,7 @@ void main() {
     vec2 final_uv = displaced_pos / u_resolution.xy;
 
     // 7. Sample the texture from the new UV
-    gl_FragColor = texture2D(u_texture, final_uv);
+    fragColor = texture(u_texture, final_uv);
 }
     `;
     super(canvas, fragmentShaderSource);
