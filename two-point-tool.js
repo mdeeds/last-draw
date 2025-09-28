@@ -13,6 +13,8 @@ export class TwoPointTool {
   gl;
   /** @type {boolean} */
   isDragging = false;
+  /** @type {boolean} */
+  isDirty = true;
 
 
   /**
@@ -31,8 +33,10 @@ export class TwoPointTool {
 
     this.initialize();
     this.sourceTexture = undefined;
-    this.targetTexture = undefined;
+    this.targetTextureA = undefined;
+    this.targetTextureB = undefined;
     this.framebuffer = undefined;
+    this.isLooping = false;
   }
 
   // Helper functions to create and compile shaders
@@ -241,23 +245,33 @@ void main() {
     this.canvas.addEventListener('touchmove', (e) => this.onDragMove(e));
     this.canvas.addEventListener('touchend', () => this.onDragEnd());
     this.canvas.addEventListener('touchcancel', () => this.onDragEnd()); // Handle touch interruption
+    this.startRenderLoop();
+  }
 
-    // Main render loop
-    // Initial render
-    this.updateSmudgePoints();
-    this.render();
+  startRenderLoop() {
+    if (this.isLooping) {
+      return;
+    }
+    this.isLooping = true;
+
+    const loop = () => {
+      this.render();
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
   }
 
   /** @param {MouseEvent | TouchEvent} e */
   onDragStart(e) {
+    console.log('start');
     e.preventDefault();
     this.isDragging = true;
     const pointSource = e instanceof MouseEvent ? e : e.touches[0];
     this.startPoint = this.getCanvasPointFromEvent(pointSource);
     this.endPoint = { ...this.startPoint };
     this.midPoints.length = 0;
-    this.updateSmudgePoints();
-    this.render();
+    this.needsCommit = false;
+    this.isDirty = true;
   }
 
   /** @param {MouseEvent | TouchEvent} e */
@@ -267,29 +281,47 @@ void main() {
     const pointSource = e instanceof MouseEvent ? e : e.touches[0];
     this.midPoints.push(this.endPoint);
     this.endPoint = this.getCanvasPointFromEvent(pointSource);
-    this.updateSmudgePoints();
-    this.render();
+    this.isDirty = true;
   }
 
   onDragEnd() {
+    console.log('end');
     if (!this.isDragging) return;
     this.isDragging = false;
 
-    // 1. Render the full effect chain into the target texture
-    this.runShaderPasses(this.sourceTexture, this.targetTexture);
+    // The render loop will handle committing the change.
+    // We just need to mark it as dirty.
+    this.isDirty = true;
+    this.needsCommit = true;
+  }
 
-    // 2. Commit the changes by swapping the source and target textures
-    [this.sourceTexture, this.targetTexture] = [this.targetTexture, this.sourceTexture];
+  #runProgram(program, locations, currentSource) {
+    this.gl.useProgram(program);
+    this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
-    // 3. Unbind framebuffer to allow rendering to canvas again
-    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+    this.gl.activeTexture(this.gl.TEXTURE0);
+    this.gl.bindTexture(this.gl.TEXTURE_2D, currentSource);
+    this.gl.uniform1i(locations.uniforms.texture, 0);
 
-    // 4. Reset points to stop the smudge effect
-    this.startPoint = { x: 0, y: 0 };
-    this.endPoint = { x: 0, y: 0 };
-    this.updateSmudgePoints();
-    this.render();
+    this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+  }
 
+  // Special case for a single shader pass.  This is tricky when committing a change
+  // because we need to swap textures around
+  #runSingleShaderPass(finalDestinationTexture) {
+    const { program, locations } = this.programs[0];
+    if (!finalDestinationTexture) {
+      // Easy case: just display the final output
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+      this.#runProgram(program, locations, this.sourceTexture);
+    } else {
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
+      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureA, 0);
+      this.#runProgram(program, locations, this.sourceTexture);
+      this.gl.flush();
+      // Swap the textures now that we've committed them.
+      [this.targetTextureA, this.sourceTexture] = [this.sourceTexture, this.targetTextureA];
+    }
   }
 
   /**
@@ -298,45 +330,66 @@ void main() {
    * @param {WebGLTexture | null} finalDestinationTexture The texture to render the final output to. If null, renders to the canvas.
    */
   runShaderPasses(initialSourceTexture, finalDestinationTexture) {
-    let currentSource = initialSourceTexture;
-    let currentDest = this.targetTexture;
+    if (this.programs.length === 1) {
+      this.#runSingleShaderPass(finalDestinationTexture);
+      return;
+    }
 
+    let currentSource = initialSourceTexture;
     for (let i = 0; i < this.programs.length; i++) {
       const { program, locations } = this.programs[i];
       const isLastPass = i === this.programs.length - 1;
 
       // Determine destination: canvas for the last pass, or the other texture for intermediate passes.
       if (isLastPass) {
-        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, finalDestinationTexture ? this.framebuffer : null);
-        if (finalDestinationTexture) {
+        if (!finalDestinationTexture) {
+          // Easy case: just display the final output
+          this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+        } else {
+          // Write to the final output.
+          this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
           this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, finalDestinationTexture, 0);
+          this.sourceTexture = finalDestinationTexture;
         }
       } else {
+        // Inner texture.
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-        this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, currentDest, 0);
+        this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureA, 0);
       }
-
-      this.gl.useProgram(program);
-      this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
-
-      this.gl.activeTexture(this.gl.TEXTURE0);
-      this.gl.bindTexture(this.gl.TEXTURE_2D, currentSource);
-      this.gl.uniform1i(locations.uniforms.texture, 0);
-
-      this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
-
-      // Ping-pong textures for the next pass
-      [currentSource, currentDest] = [currentDest, currentSource];
+      this.#runProgram(program, locations, currentSource);
+      // The new source will be A because that's where we just wrote to.
+      currentSource = this.targetTextureA;
+      // Then we swap A and B so we will write to a different texture.
+      [this.targetTextureA, this.targetTextureB] = [this.targetTextureB, this.targetTextureA];
     }
   }
 
   render() {
-    if (!this.sourceTexture) return;
+    if (!this.isDirty || !this.sourceTexture) {
+      return;
+    }
 
-    // When dragging, we render the effect chain to the canvas for a live preview.
-    // The source is always the original, unmodified background texture.
-    // The final destination is the screen (null).
-    this.runShaderPasses(this.sourceTexture, null);
+    this.updateSmudgePoints();
+
+    this.isDirty = false;
+    if (!this.needsCommit) {
+      // While dragging, render a live preview to the canvas.
+      // The source is always the clean `sourceTexture`.
+      this.runShaderPasses(this.sourceTexture, null);
+    } else {
+      // 1. Render the full effect chain into the target texture
+      this.runShaderPasses(this.sourceTexture, this.sourceTexture);
+
+      this.startPoint = { x: 0, y: 0 };
+      this.endPoint = { x: 0, y: 0 };
+      this.updateSmudgePoints();
+      this.needsCommit = false;
+      this.isDirty = true;  // Still dirty because we need to render the frame we just wrote.
+      // 4. Render the newly committed texture to the canvas.
+    }
+
+    // Flush the command buffer to ensure the render is processed promptly.
+    this.gl.flush();
   }
 
   /**
@@ -350,8 +403,9 @@ void main() {
     if (this.sourceTexture) {
       gl.deleteTexture(this.sourceTexture);
     }
-    if (this.targetTexture) {
-      gl.deleteTexture(this.targetTexture);
+    if (this.targetTextureA) {
+      gl.deleteTexture(this.targetTextureA);
+      gl.deleteTexture(this.targetTextureB);
     }
     if (this.framebuffer) {
       gl.deleteFramebuffer(this.framebuffer);
@@ -371,7 +425,8 @@ void main() {
     gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas); // Upload image
 
-    this.targetTexture = createAndSetupTexture();
+    this.targetTextureA = createAndSetupTexture();
+    this.targetTextureB = createAndSetupTexture();
 
     // Create and configure the framebuffer
     this.framebuffer = gl.createFramebuffer();
@@ -381,7 +436,7 @@ void main() {
     gl.bindTexture(gl.TEXTURE_2D, null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-    this.render();
+    this.isDirty = true;
   }
 
 }
