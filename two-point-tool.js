@@ -304,6 +304,7 @@ void main() {
     this.gl.uniform1i(locations.uniforms.texture, 0);
 
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
+    this.gl.flush();
   }
 
   // Special case for a single shader pass.  This is tricky when committing a change
@@ -346,21 +347,24 @@ void main() {
           // Easy case: just display the final output
           this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
         } else {
-          // Write to the final output.
+          // Write to the final output back to the source texture.
+          // We have at least two shaders, so this is safe.
           this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-          this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, finalDestinationTexture, 0);
-          this.sourceTexture = finalDestinationTexture;
+          this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.sourceTexture, 0);
+          console.log('AAAAA');
         }
+        this.#runProgram(program, locations, currentSource);
+        this.gl.flush();
       } else {
         // Inner texture.
         this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
         this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureA, 0);
+        this.#runProgram(program, locations, currentSource);
+        // The new source will be A because that's where we just wrote to.
+        currentSource = this.targetTextureA;
+        // Then we swap A and B so we will write to a different texture.
+        [this.targetTextureA, this.targetTextureB] = [this.targetTextureB, this.targetTextureA];
       }
-      this.#runProgram(program, locations, currentSource);
-      // The new source will be A because that's where we just wrote to.
-      currentSource = this.targetTextureA;
-      // Then we swap A and B so we will write to a different texture.
-      [this.targetTextureA, this.targetTextureB] = [this.targetTextureB, this.targetTextureA];
     }
   }
 
@@ -379,13 +383,14 @@ void main() {
     } else {
       // 1. Render the full effect chain into the target texture
       this.runShaderPasses(this.sourceTexture, this.sourceTexture);
-
       this.startPoint = { x: 0, y: 0 };
       this.endPoint = { x: 0, y: 0 };
       this.updateSmudgePoints();
       this.needsCommit = false;
       this.isDirty = true;  // Still dirty because we need to render the frame we just wrote.
       // 4. Render the newly committed texture to the canvas.
+      // The frame is now dirty because we need to render the newly committed texture.
+      this.isDirty = true;
     }
 
     // Flush the command buffer to ensure the render is processed promptly.
