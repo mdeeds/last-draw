@@ -15,6 +15,7 @@ uniform sampler2D u_texture;
 uniform vec2 u_resolution;
 uniform vec2 u_start;
 uniform vec2 u_end;
+uniform vec2 u_mid;
 
 out vec4 fragColor;
 
@@ -59,7 +60,7 @@ vec2 findCircleCenter(vec2 a, vec2 b, vec2 c) {
     return mid_ab + t * perp_ab;
 }
 
-// Returns true if the path from a to b to c is a counter-clockwise turn.
+// Returns the magnitude of the cross product of ab cross ac
 // This is determined by the sign of the 2D cross product of vectors ab and ac.
 float cross_product(vec2 a, vec2 b, vec2 c) {
     vec2 ab = b - a;
@@ -79,7 +80,7 @@ void main() {
     }
 
     // For now, point c is at the origin.
-    vec2 c = u_resolution.xy * 0.5;
+    vec2 c = u_mid;
 
     if (distanceToLine(c, u_start, u_end) < 1.0) {
         fragColor = texture(u_texture, uv);

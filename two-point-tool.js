@@ -91,6 +91,7 @@ void main() {
         resolution: this.gl.getUniformLocation(program, 'u_resolution'),
         start: this.gl.getUniformLocation(program, 'u_start'),
         end: this.gl.getUniformLocation(program, 'u_end'),
+        mid: this.gl.getUniformLocation(program, 'u_mid'),
         texture: this.gl.getUniformLocation(program, 'u_texture'),
       },
     };
@@ -122,6 +123,46 @@ void main() {
     };
   }
 
+  #squaredDistance(a, b) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return dx * dx + dy * dy;
+  }
+
+  /**
+   * Returns the squared distance from p to the closest point on the line connecting a and b.
+   * @param {Point} p The point to measure
+   * @param {Point} a One point defining the line
+   * @param {Point} b The other point defining the line
+   * @returns 
+   */
+  #distanceToLine2(p, a, b) {
+    const ab = { x: b.x - a.x, y: b.y - a.y };
+    const ap = { x: p.x - a.x, y: p.y - a.y };
+
+    const ab2 = ab.x * ab.x + ab.y * ab.y;
+
+    if (ab2 === 0) {
+      // a and b are the same point
+      return this.#squaredDistance(p, a);
+    }
+
+    // Project p onto the line defined by a and b
+    const t = (ap.x * ab.x + ap.y * ab.y) / ab2;
+
+    // // If the projection is outside the segment, clamp to the nearest endpoint
+    // if (t < 0) {
+    //   return this.#squaredDistance(p, a);
+    // }
+    // if (t > 1) {
+    //   return this.#squaredDistance(p, b);
+    // }
+
+    // The projection is on the segment. Find the squared distance to the projection point.
+    const closestPoint = { x: a.x + t * ab.x, y: a.y + t * ab.y };
+    return this.#squaredDistance(p, closestPoint);
+  }
+
   updateSmudgePoints() {
     if (!this.locations) {
       throw new Error('Locations not initialized');
@@ -134,6 +175,17 @@ void main() {
     }
     this.gl.uniform2f(this.locations.uniforms.start, this.startPoint.x, this.startPoint.y);
     this.gl.uniform2f(this.locations.uniforms.end, this.endPoint.x, this.endPoint.y);
+    // Find the mid point furthest from start and end.
+    let maxDistance = 0;
+    let midPoint = { x: 0, y: 0 };
+    for (const point of this.midPoints) {
+      const d2 = this.#distanceToLine2(point, this.startPoint, this.endPoint);
+      if (d2 > maxDistance) {
+        maxDistance = d2;
+        midPoint = point;
+      }
+    }
+    this.gl.uniform2f(this.locations.uniforms.mid, midPoint.x, midPoint.y);
   }
 
 
@@ -144,6 +196,8 @@ void main() {
     this.startPoint = { x: 0, y: 0 };
     /** @type {Point} */
     this.endPoint = { x: 0, y: 0 };
+
+    this.midPoints = [];
 
     // Handle mouse events
     this.canvas.addEventListener('mousedown', (e) => this.onDragStart(e));
@@ -169,6 +223,7 @@ void main() {
     const pointSource = e instanceof MouseEvent ? e : e.touches[0];
     this.startPoint = this.getCanvasPointFromEvent(pointSource);
     this.endPoint = { ...this.startPoint };
+    this.midPoints.length = 0;
     this.updateSmudgePoints();
     this.render();
   }
@@ -178,6 +233,7 @@ void main() {
     if (!this.isDragging) return;
     e.preventDefault();
     const pointSource = e instanceof MouseEvent ? e : e.touches[0];
+    this.midPoints.push(this.endPoint);
     this.endPoint = this.getCanvasPointFromEvent(pointSource);
     this.updateSmudgePoints();
     this.render();
