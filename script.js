@@ -11,14 +11,8 @@ function createBackground() {
   if (!ctx) {
     throw new Error("Unable to create 2D context.");
   }
-  const colors = ['red', 'green', 'blue', 'yellow'];
-  const tileSize = tempCanvas.width / 16;
-  for (let y = 0; y < 16; y++) {
-    for (let x = 0; x < 16; x++) {
-      ctx.fillStyle = colors[(x + y) % 4];
-      ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-    }
-  }
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
   return tempCanvas;
 }
 

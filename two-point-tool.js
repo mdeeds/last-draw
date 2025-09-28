@@ -107,8 +107,6 @@ void main() {
     this.gl.vertexAttribPointer(this.locations.attributes.position, 2, this.gl.FLOAT, false, 0, 0);
   }
 
-
-
   /**
    * Gets the canvas-relative coordinates from a mouse or touch event.  We use a right-handed coordinate
    * system measured in pixels with the origin in the lower-left corner.
@@ -127,6 +125,10 @@ void main() {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
     return dx * dx + dy * dy;
+  }
+
+  #distance(a, b) {
+    return Math.sqrt(this.#squaredDistance(a, b));
   }
 
   /**
@@ -176,8 +178,9 @@ void main() {
     this.gl.uniform2f(this.locations.uniforms.start, this.startPoint.x, this.startPoint.y);
     this.gl.uniform2f(this.locations.uniforms.end, this.endPoint.x, this.endPoint.y);
     // Find the mid point furthest from start and end.
+    let midPoint = this.startPoint;
+
     let maxDistance = 0;
-    let midPoint = { x: 0, y: 0 };
     for (const point of this.midPoints) {
       const d2 = this.#distanceToLine2(point, this.startPoint, this.endPoint);
       if (d2 > maxDistance) {
@@ -185,6 +188,22 @@ void main() {
         midPoint = point;
       }
     }
+
+    // // Find the "median" point
+    // let midPoint = this.startPoint;
+    // let totalDistance = 0;
+    // for (let i = 1; i < this.midPoints.length; i++) {
+    //   totalDistance += this.#distance(this.midPoints[i - 1], this.midPoints[i]);
+    // }
+    // const midDistance = totalDistance / 2.0;
+    // totalDistance = 0;
+    // for (let i = 1; i < this.midPoints.length; i++) {
+    //   totalDistance += this.#distance(this.midPoints[i - 1], this.midPoints[i]);
+    //   if (totalDistance >= midDistance) {
+    //     midPoint = this.midPoints[i - 1];
+    //     break;
+    //   }
+    // }
     this.gl.uniform2f(this.locations.uniforms.mid, midPoint.x, midPoint.y);
   }
 
