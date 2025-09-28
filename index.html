@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Google Drive Demo</title>
+  <script src="GoogleDriveManager.js"></script>
+</head>
+
+<body>
+  <h1>Google Drive Pure JS Demo</h1>
+  <p>This will test reading and writing a file named 'test.txt' in a folder named 'MyAppFolder'.</p>
+  <button id="runTestBtn">Run Read/Write Test</button>
+  <hr>
+  <pre id="output"></pre>
+
+  <script>
+    // --- CONFIGURATION ---
+    const config = {
+      clientId: 'YOUR_CLIENT_ID.apps.googleusercontent.com', // <-- REPLACE WITH YOUR CLIENT ID
+      redirectUri: 'http://localhost:8000/callback.html', // <-- MUST MATCH YOUR CONSOLE CONFIG
+    };
+    // ---------------------
+
+    const driveManager = new GoogleDriveManager(config);
+    const outputEl = document.getElementById('output');
+
+    function log(message) {
+      console.log(message);
+      outputEl.textContent += message + '\n';
+    }
+
+    async function runTest() {
+      outputEl.textContent = '';
+      try {
+        const folderName = 'MyAppFolder'; // The app will look for this folder. Create it in your Drive first.
+        const fileName = 'test.txt';
+        const fileContent = `Hello from my app! The time is ${new Date().toISOString()}`;
+
+        log(`Attempting to write to ${folderName}/${fileName}...`);
+        await driveManager.putFile(folderName, fileName, fileContent);
+        log('File written successfully!');
+
+        log(`\nAttempting to read from ${folderName}/${fileName}...`);
+        const content = await driveManager.getFile(folderName, fileName);
+        log('File read successfully!');
+        log(`\nContent:\n---\n${content}\n---`);
+
+      } catch (error) {
+        log(`An error occurred: ${error.message}`);
+        console.error(error);
+      }
+    }
+
+    document.getElementById('runTestBtn').addEventListener('click', runTest);
+  </script>
+</body>
+
+</html>

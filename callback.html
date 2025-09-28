@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Authenticating...</title>
+  <script src="GoogleDriveManager.js"></script>
+</head>
+
+<body>
+  <p>Authenticating, please wait...</p>
+  <script>
+    // --- CONFIGURATION ---
+    // This must be the same as on your index page.
+    const config = {
+      clientId: 'YOUR_CLIENT_ID.apps.googleusercontent.com', // <-- REPLACE WITH YOUR CLIENT ID
+      redirectUri: 'http://localhost:8000/callback.html', // <-- MUST MATCH YOUR CONSOLE CONFIG
+    };
+    // ---------------------
+
+    const driveManager = new GoogleDriveManager(config);
+    driveManager.handleAuthentication();
+
+    // Redirect back to the main page
+    window.location.href = '/';
+  </script>
+</body>
+
+</html>
