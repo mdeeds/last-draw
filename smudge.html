@@ -12,6 +12,9 @@
   <div class="flex flex-col items-center p-4">
     <h1 class="text-3xl font-bold mb-4 text-white">WebGL Smudge Tool</h1>
     <canvas id="smudgeCanvas"></canvas>
+    <div class="mt-4">
+      <input type="file" id="imageUpload" accept="image/*">
+    </div>
     <div class="info-box max-w-sm">
       <p>Click and drag to smudge the checkerboard.</p>
       <p>The smudge effect is powered by a real-time WebGL fragment shader.</p>
