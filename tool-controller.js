@@ -65,6 +65,8 @@ export class ToolController {
   activeTool = null;
   /** @type {PassthroughRenderer | null} */
   passthroughRenderer = null;
+  /** @type {import('./gemini-chat.js').GeminiChat | null} */
+  chatInstance = null;
 
   /**
    * @param {HTMLCanvasElement} canvas The canvas element to draw on.
@@ -93,6 +95,13 @@ export class ToolController {
     if (this.activeTool !== tool) {
       this.activeTool = tool;
       this.isDirty = true;
+    }
+  }
+
+  /** @param {import('./gemini-chat.js').GeminiChat} chatInstance */
+  setChatInstance(chatInstance) {
+    if (chatInstance) {
+      this.chatInstance = chatInstance;
     }
   }
 
@@ -349,6 +358,7 @@ export class ToolController {
     } else {
       this.updateToolPoints();
       this.runShaderPasses(this.needsCommit);
+
     }
 
     if (this.needsCommit) {
@@ -356,6 +366,17 @@ export class ToolController {
       this.endPoint = { x: 0, y: 0 };
       this.needsCommit = false;
       this.isDirty = true;
+
+      if (this.chatInstance) {
+        // Read pixels from the committed sourceTexture and send to chat
+        const pixels = new Uint8ClampedArray(this.gl.canvas.width * this.gl.canvas.height * 4);
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
+        this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.sourceTexture, 0);
+        this.gl.readPixels(0, 0, this.gl.canvas.width, this.gl.canvas.height, this.gl.RGBA, this.gl.UNSIGNED_BYTE, pixels);
+        this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+
+        this.chatInstance.setImage(pixels, this.gl.canvas.width, this.gl.canvas.height);
+      }
     }
   }
 

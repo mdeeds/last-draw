@@ -19,12 +19,15 @@ function createBackground() {
   return tempCanvas;
 }
 
+/** @type {GeminiChat | null} */
+let geminiChat = null;
+
 async function initializeChat() {
   try {
     const response = await fetch('api.key');
     const apiKey = await response.text();
     const chatContainer = document.getElementById('chat-container');
-    new GeminiChat(chatContainer, apiKey.trim());
+    geminiChat = new GeminiChat(chatContainer, apiKey.trim());
   } catch (error) {
     console.error("Failed to initialize Gemini Chat:", error);
   }
@@ -148,4 +151,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   await initializeChat();
+  if (geminiChat) {
+    controller.setChatInstance(geminiChat);
+  }
 });

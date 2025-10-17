@@ -7,7 +7,7 @@
 
 // Text only: "gemini-flash-latest"
 
-const MODEL_NAME = "gemini-1.5-flash-latest";
+const MODEL_NAME = "gemini-flash-latest";
 
 export class GeminiChat {
   /**
@@ -90,8 +90,21 @@ export class GeminiChat {
       const ctx = tempCanvas.getContext('2d');
 
       if (ctx) {
-        const imgData = new ImageData(this.imageData, this.imageWidth, this.imageHeight);
-        ctx.putImageData(imgData, 0, 0);
+        // The image data from WebGL's readPixels is flipped vertically.
+        // We need to draw it to a canvas and then flip it back.
+        const sourceCanvas = document.createElement('canvas');
+        sourceCanvas.width = this.imageWidth;
+        sourceCanvas.height = this.imageHeight;
+        const sourceCtx = sourceCanvas.getContext('2d');
+        const imgData = new ImageData(new Uint8ClampedArray(this.imageData.buffer), this.imageWidth, this.imageHeight);
+        sourceCtx.putImageData(imgData, 0, 0);
+
+        // Flip the image vertically when drawing to the destination canvas
+        ctx.save();
+        ctx.translate(0, this.imageHeight);
+        ctx.scale(1, -1);
+        ctx.drawImage(sourceCanvas, 0, 0);
+        ctx.restore();
         const dataUrl = tempCanvas.toDataURL('image/png');
         const base64Data = dataUrl.substring('data:image/png;base64,'.length);
 
@@ -101,6 +114,9 @@ export class GeminiChat {
             data: base64Data
           }
         });
+
+        // Clear the image data after adding it to the message parts
+        this.clearImageData();
       }
     }
 
@@ -131,5 +147,11 @@ export class GeminiChat {
       console.error("Error calling Gemini API:", error);
       this.addMessageToUI('model', 'Sorry, I encountered an error.');
     }
+  }
+
+  clearImageData() {
+    this.imageData = undefined;
+    this.imageWidth = undefined;
+    this.imageHeight = undefined;
   }
 }
