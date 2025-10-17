@@ -1,14 +1,13 @@
 // @ts-check
 
-import { TwoPointTool } from './two-point-tool.js';
+import { ShaderTool } from './shader-tool.js';
 
-export class EraserTool extends TwoPointTool {
-  /**
-   * 
-   * @param {HTMLCanvasElement!} canvas 
-   */
-  constructor(canvas) {
-    const fragmentShaderTemplate = `#version 300 es
+/**
+ * @param {WebGL2RenderingContext} gl
+ * @returns {ShaderTool}
+ */
+export function createEraserTool(gl) {
+  const fragmentShaderTemplate = `#version 300 es
 precision mediump float;
 uniform sampler2D u_texture;
 uniform vec2 u_resolution;
@@ -87,9 +86,8 @@ void main() {
     fragColor = mix(blurred_color, vec4(1.0, 1.0, 1.0, 1.0), lighten_factor);
 }
 `;
-    super(canvas, [
-      fragmentShaderTemplate.replace('__BLUR_DIRECTION__', 'vec2(1.0, 0.0)'),
-      fragmentShaderTemplate.replace('__BLUR_DIRECTION__', 'vec2(0.0, 1.0)')
-    ]);
-  }
+  return new ShaderTool(gl, [
+    fragmentShaderTemplate.replace('__BLUR_DIRECTION__', 'vec2(1.0, 0.0)'),
+    fragmentShaderTemplate.replace('__BLUR_DIRECTION__', 'vec2(0.0, 1.0)')
+  ]);
 }

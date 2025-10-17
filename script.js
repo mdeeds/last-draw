@@ -1,8 +1,6 @@
-import { SmudgeTool } from './smudge-gl.js';
-import { RotationTool } from './rotation-gl.js';
-import { LineTool } from './line-gl.js';
-import { ArcTool } from './arc-gl.js';
-import { EraserTool } from './eraser-gl.js';
+import { createEraserTool } from './eraser-gl.js';
+import { createSmudgeTool } from './smudge-gl.js';
+import { ToolController } from './tool-controller.js';
 
 function createBackground() {
   const tempCanvas = document.createElement('canvas');
@@ -29,29 +27,27 @@ document.addEventListener('DOMContentLoaded', () => {
   canvas.width = 1024;
   canvas.height = canvas.width;
 
+  const controller = new ToolController(canvas);
   const background = createBackground();
 
   const tools = {
-    'e': new EraserTool(canvas),
-    's': new SmudgeTool(canvas)
+    'e': createEraserTool(controller.gl),
+    's': createSmudgeTool(controller.gl)
   };
 
   // Initialize all tools with the background
-  Object.values(tools).forEach(t => t.setBackgroundTexture(background));
+  controller.setBackgroundTexture(background);
 
-  let tool = tools['e']; // Start with the Eraser tool
+  controller.setTool(tools['e']); // Start with the Eraser tool
 
   document.addEventListener('keydown', (event) => {
     const newTool = tools[event.key];
-    if (newTool && newTool !== tool) {
-      // Preserve the current canvas state when switching tools
-      newTool.sourceTexture = tool.sourceTexture;
-      tool = newTool;
-      tool.isDirty = true; // Mark as dirty to force a redraw
+    if (newTool && newTool !== controller.activeTool) {
+      controller.setTool(newTool);
     }
   });
   const loop = () => {
-    tool.render();
+    controller.render();
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
@@ -95,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.scale(1, -1);
         ctx.drawImage(img, x, y, drawWidth, drawHeight);
         ctx.restore();
-        tool.setBackgroundTexture(tempCanvas);
+        controller.setBackgroundTexture(tempCanvas);
       };
       img.src = e.target.result;
     };
