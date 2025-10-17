@@ -1,7 +1,7 @@
 /**
  * @typedef {{
  *   program: WebGLProgram,
- *   locations: { attributes: { position: number }, uniforms: { resolution: WebGLUniformLocation | null, start: WebGLUniformLocation | null, end: WebGLUniformLocation | null, mid: WebGLUniformLocation | null, texture: WebGLUniformLocation | null, isDragging?: WebGLUniformLocation | null, dragLength?: WebGLUniformLocation | null } }
+ *   locations: { attributes: { position: number }, uniforms: { resolution: WebGLUniformLocation | null, start: WebGLUniformLocation | null, end: WebGLUniformLocation | null, mid: WebGLUniformLocation | null, texture: WebGLUniformLocation | null } }
  * }} WebGLProgramInfo
  */
 
@@ -31,6 +31,9 @@ export class ShaderTool {
     this.gl.shaderSource(shader, source);
     this.gl.compileShader(shader);
     if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+
+      const sourceWithLines = source.split('\n').map((line, index) => `${index + 1}: ${line}`).join('\n');
+      console.log(sourceWithLines);
       console.error('An error occurred compiling the shaders: ' + this.gl.getShaderInfoLog(shader));
       this.gl.deleteShader(shader);
       throw new Error('Shader compilation failed');
@@ -74,8 +77,6 @@ export class ShaderTool {
             end: this.gl.getUniformLocation(program, 'u_end'),
             mid: this.gl.getUniformLocation(program, 'u_mid'),
             texture: this.gl.getUniformLocation(program, 'u_texture'),
-            isDragging: this.gl.getUniformLocation(program, 'u_is_dragging'),
-            dragLength: this.gl.getUniformLocation(program, 'u_drag_length'),
           },
         }
       };

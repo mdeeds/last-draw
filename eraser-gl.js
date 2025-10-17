@@ -13,8 +13,6 @@ uniform sampler2D u_texture;
 uniform vec2 u_resolution;
 uniform vec2 u_start;
 uniform vec2 u_end;
-uniform float u_drag_length;
-uniform float u_is_dragging; // Use float for bool
 
 out vec4 fragColor;
 
@@ -51,7 +49,8 @@ void main() {
     
     vec4 final_color = texture(u_texture, p / u_resolution);
 
-    if (u_is_dragging < 0.5) { // Check float as bool
+    float drag_length = distance(u_end, u_start);
+    if (drag_length < 1.0) {
         fragColor = final_color;
         return;
     }
@@ -66,8 +65,8 @@ void main() {
     float dist_from_line = distance(p, closest_point_on_line);
 
     // Interpolate the blur radius based on distance from the pill's edge
-    float inner_radius = u_drag_length * 0.2;
-    float outer_radius = u_drag_length * 1.2;
+    float inner_radius = drag_length * 0.2;
+    float outer_radius = drag_length * 1.2;
     float blur_radius_factor = 1.0 - smoothstep(inner_radius, outer_radius, dist_from_line);
     float blur_radius = blur_radius_factor * inner_radius;
 

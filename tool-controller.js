@@ -256,15 +256,18 @@ export class ToolController {
     // Pass 2: Render from targetTextureA (result of pass 1) to final destination
     const { program: program1, locations: locations1 } = this.activeTool.programs[1];
     if (!commitTexture) {
-      // Final pass is a preview, so render to the canvas.
+      // Final pass is a preview, so render to the canvas using targetTextureA as source.
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.#runProgram(program1, locations1, this.targetTextureA);
     } else {
-      // Final pass is a commit. Render the result of pass 1 (in targetTextureA) to targetTextureB.
+      // Final pass is a commit. Render the result of pass 1 (in targetTextureA) to targetTextureB
+      // because we cannot read from and write to the same texture in a single pass.
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.sourceTexture, 0);
+      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureB, 0);
       this.#runProgram(program1, locations1, this.targetTextureA);
-      console.log('Committing two.');
+      // The final result is in targetTextureB. Swap it into sourceTexture.
+      [this.sourceTexture, this.targetTextureB] = [this.targetTextureB, this.sourceTexture];
+      console.log('Committing two passes. Swapped targetTextureB into sourceTexture.');
     }
   }
 
@@ -274,17 +277,16 @@ export class ToolController {
     if (!commitTexture) {
       // Easy case: just display the final output
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
-      this.#runProgram(program, locations, this.sourceTexture);
     } else {
       // When committing, we render to an intermediate texture first...
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
       this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureA, 0);
-      this.#runProgram(program, locations, this.sourceTexture);
-
-      // ...then we swap the source and target textures to "commit" the change.
-      // The old source becomes the new target, and the result becomes the new source.
+    }
+    this.#runProgram(program, locations, this.sourceTexture);
+    if (commitTexture) {
       [this.targetTextureA, this.sourceTexture] = [this.sourceTexture, this.targetTextureA];
-      console.log('Committing single.');
+      console.log('Committing single pass. Swapped targetTextureA into sourceTexture.');
+
     }
   }
 
@@ -391,6 +393,7 @@ export class ToolController {
 
     this.sourceTexture = createAndSetupTexture();
     gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
+    console.log('Setting background texture. New sourceTexture created.');
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
 
     this.targetTextureA = createAndSetupTexture();

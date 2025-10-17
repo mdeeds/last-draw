@@ -2,12 +2,8 @@
 
 import { ShaderTool } from './shader-tool.js';
 
-/**
- * @param {WebGL2RenderingContext} gl
- * @returns {ShaderTool}
- */
-export function createSmudgeTool(gl) {
-  const fragmentShaderSource = `#version 300 es
+class SmudgeSource {
+  static fragmentShaderSource = `#version 300 es
 
 precision mediump float;
 uniform sampler2D u_texture;
@@ -80,6 +76,21 @@ void main() {
     // 7. Sample the texture from the new UV
     fragColor = texture(u_texture, final_uv);
 }
-    `;
-  return new ShaderTool(gl, fragmentShaderSource);
+`
+}
+
+/**
+ * @param {WebGL2RenderingContext} gl
+ * @returns {ShaderTool}
+ */
+export function createSmudgeTool(gl) {
+  return new ShaderTool(gl, SmudgeSource.fragmentShaderSource);
+}
+
+/**
+ * @param {WebGL2RenderingContext} gl
+ * @returns {ShaderTool}
+ */
+export function createDoubleSmudgeTool(gl) {
+  return new ShaderTool(gl, [SmudgeSource.fragmentShaderSource, SmudgeSource.fragmentShaderSource]);
 }

@@ -1,5 +1,5 @@
 import { createEraserTool } from './eraser-gl.js';
-import { createSmudgeTool } from './smudge-gl.js';
+import { createDoubleSmudgeTool, createSmudgeTool } from './smudge-gl.js';
 import { ToolController } from './tool-controller.js';
 
 function createBackground() {
@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const tools = {
     'e': createEraserTool(controller.gl),
+    'd': createDoubleSmudgeTool(controller.gl),
     's': createSmudgeTool(controller.gl)
   };
 
