@@ -16,6 +16,8 @@ export class TwoPointTool {
   /** @type {boolean} */
   isDirty = true;
 
+  /** @type {TwoPointTool | null} */
+  static activeTool = null;
 
   /**
    * @param {HTMLCanvasElement} canvas The canvas element to draw on.
@@ -36,6 +38,7 @@ export class TwoPointTool {
     this.targetTextureA = undefined;
     this.targetTextureB = undefined;
     this.framebuffer = undefined;
+    TwoPointTool.activeTool = this;
   }
 
   // Helper functions to create and compile shaders
@@ -249,6 +252,7 @@ void main() {
 
   /** @param {MouseEvent | TouchEvent} e */
   onDragStart(e) {
+    if (TwoPointTool.activeTool !== this) { return; }
     console.log('start');
     e.preventDefault();
     this.isDragging = true;
@@ -262,6 +266,7 @@ void main() {
 
   /** @param {MouseEvent | TouchEvent} e */
   onDragMove(e) {
+    if (TwoPointTool.activeTool !== this) { return; }
     if (!this.isDragging) return;
     e.preventDefault();
     const pointSource = e instanceof MouseEvent ? e : e.touches[0];
@@ -271,12 +276,13 @@ void main() {
   }
 
   onDragEnd() {
+    if (TwoPointTool.activeTool !== this) { return; }
     if (!this.isDragging) return;
-    this.isDragging = false;
 
     // The render loop will handle committing the change.
     // We just need to mark it as dirty.
-    console.log('end');
+    console.log(`end.  Program length: ${this.fragmentShaderSources.length}`);
+    this.isDragging = false;
     this.isDirty = true;
     this.needsCommit = true;
   }
@@ -294,8 +300,8 @@ void main() {
   }
 
   /**
-   * Runs the shader pipeline for exactly two passes without a loop.
-   * @param {WebGLTexture | null} commitTexture The texture to render the final output to. If null, renders to the canvas.
+   * 
+   * @param {boolean} commitTexture The texture to render the final output to. If null, renders to the canvas.
    */
   #runTwoShaderPasses(commitTexture) {
     // Pass 1: Render from sourceTexture to targetTextureA
@@ -312,13 +318,13 @@ void main() {
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.#runProgram(program1, locations1, this.targetTextureA);
     } else {
-      console.log('Final pass');
-      // Final pass is a commit. Render to targetTextureB, then swap targetTextureA and targetTextureB.
-      // This ensures the final result is in targetTextureA, consistent with the render method's commit logic.
+      // Final pass is a commit. Render the result of pass 1 (in targetTextureA) to targetTextureB.
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
       this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0,
         this.gl.TEXTURE_2D, this.targetTextureB, 0);
-      this.#runProgram(program1, locations1, this.sourceTexture);
+      this.#runProgram(program1, locations1, this.targetTextureA);
+      // Now, swap the original source with the final result to "commit" the change.
+      [this.sourceTexture, this.targetTextureB] = [this.targetTextureB, this.sourceTexture];
     }
   }
 
@@ -343,14 +349,18 @@ void main() {
     }
   }
 
-  #runMultipleShaderPasses(finalDestinationTexture) {
+  /**
+   * 
+   * @param {boolean} commitTexture The texture to render the final output to. If null, renders to the canvas.
+   */
+  #runMultipleShaderPasses(commitTexture) {
     let currentSource = this.sourceTexture;
     for (let i = 0; i < this.programs.length; i++) {
       const { program, locations } = this.programs[i];
       const isLastPass = i === this.programs.length - 1;
 
       if (isLastPass) {
-        if (!finalDestinationTexture) {
+        if (!commitTexture) {
           // Final pass is a preview, so render to the canvas.
           this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
         } else {
@@ -378,19 +388,20 @@ void main() {
   /**
    * Runs the shader pipeline.
    * @param {WebGLTexture} initialSourceTexture The texture to use as input for the first pass.
-   * @param {WebGLTexture | null} finalDestinationTexture The texture to render the final output to. If null, renders to the canvas.
+   * @param {boolean} commitTexture The texture to render the final output to. If null, renders to the canvas.
    */
-  runShaderPasses(finalDestinationTexture) {
+  runShaderPasses(commitTexture) {
     if (this.programs.length === 1) {
-      this.#runSingleShaderPass(finalDestinationTexture);
+      this.#runSingleShaderPass(commitTexture);
     } else if (this.programs.length === 2) {
-      this.#runTwoShaderPasses(finalDestinationTexture);
+      this.#runTwoShaderPasses(commitTexture);
     } else { // For more than two passes, use the generic multiple pass handler
-      this.#runMultipleShaderPasses(finalDestinationTexture);
+      this.#runMultipleShaderPasses(commitTexture);
     }
   }
 
   render() {
+    TwoPointTool.activeTool = this;
     if (!this.isDirty || !this.sourceTexture) {
       return;
     }
