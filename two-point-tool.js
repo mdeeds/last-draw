@@ -271,12 +271,12 @@ void main() {
   }
 
   onDragEnd() {
-    console.log('end');
     if (!this.isDragging) return;
     this.isDragging = false;
 
     // The render loop will handle committing the change.
     // We just need to mark it as dirty.
+    console.log('end');
     this.isDirty = true;
     this.needsCommit = true;
   }
@@ -295,47 +295,46 @@ void main() {
 
   /**
    * Runs the shader pipeline for exactly two passes without a loop.
-   * @param {WebGLTexture | null} finalDestinationTexture The texture to render the final output to. If null, renders to the canvas.
+   * @param {WebGLTexture | null} commitTexture The texture to render the final output to. If null, renders to the canvas.
    */
-  #runTwoShaderPasses(finalDestinationTexture) {
+  #runTwoShaderPasses(commitTexture) {
     // Pass 1: Render from sourceTexture to targetTextureA
     const { program: program0, locations: locations0 } = this.programs[0];
     this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-    this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureA, 0);
+    this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0,
+      this.gl.TEXTURE_2D, this.targetTextureA, 0);
     this.#runProgram(program0, locations0, this.sourceTexture);
 
     // Pass 2: Render from targetTextureA (result of pass 1) to final destination
     const { program: program1, locations: locations1 } = this.programs[1];
-    if (!finalDestinationTexture) {
+    if (!commitTexture) {
       // Final pass is a preview, so render to the canvas.
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.#runProgram(program1, locations1, this.targetTextureA);
     } else {
+      console.log('Final pass');
       // Final pass is a commit. Render to targetTextureB, then swap targetTextureA and targetTextureB.
       // This ensures the final result is in targetTextureA, consistent with the render method's commit logic.
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureB, 0);
-      this.#runProgram(program1, locations1, this.targetTextureA);
-
-      // Swap targetTextureA and targetTextureB so that targetTextureA holds the final result.
-      // This makes the output consistent with how `_runMultipleShaderPasses` leaves the state
-      // for the `render` method's commit logic.
-      [this.targetTextureA, this.targetTextureB] = [this.targetTextureB, this.targetTextureA];
+      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0,
+        this.gl.TEXTURE_2D, this.targetTextureB, 0);
+      this.#runProgram(program1, locations1, this.sourceTexture);
     }
   }
 
   // Special case for a single shader pass.  This is tricky when committing a change
   // because we need to swap textures around
-  #runSingleShaderPass(finalDestinationTexture) {
+  #runSingleShaderPass(commitTexture) {
     const { program, locations } = this.programs[0];
-    if (!finalDestinationTexture) {
+    if (!commitTexture) {
       // Easy case: just display the final output
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
       this.#runProgram(program, locations, this.sourceTexture);
     } else {
       // When committing, we render to an intermediate texture first...
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
-      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureA, 0);
+      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0,
+        this.gl.TEXTURE_2D, this.targetTextureA, 0);
       this.#runProgram(program, locations, this.sourceTexture);
 
       // ...then we swap the source and target textures to "commit" the change.
@@ -395,17 +394,10 @@ void main() {
     if (!this.isDirty || !this.sourceTexture) {
       return;
     }
-
     this.isDirty = false;
-    if (!this.needsCommit) {
-      // While dragging, render a live preview to the canvas.
-      // The source is always the clean `sourceTexture`.
-      this.updateSmudgePoints();
-      this.runShaderPasses(null);
-    } else {
-      // On mouse up, we commit the change.
-      this.updateSmudgePoints();
-      this.runShaderPasses(this.sourceTexture);
+    this.updateSmudgePoints();
+    this.runShaderPasses(this.needsCommit);
+    if (this.needsCommit) {
       // Reset points to prevent re-applying the effect on the next frame.
       this.startPoint = { x: 0, y: 0 };
       this.endPoint = { x: 0, y: 0 };
@@ -414,7 +406,7 @@ void main() {
     }
 
     // Flush the command buffer to ensure the render is processed promptly.
-    this.gl.flush();
+    // this.gl.flush();
   }
 
   /**
