@@ -36,7 +36,6 @@ export class TwoPointTool {
     this.targetTextureA = undefined;
     this.targetTextureB = undefined;
     this.framebuffer = undefined;
-    this.isLooping = false;
   }
 
   // Helper functions to create and compile shaders
@@ -245,21 +244,8 @@ void main() {
     this.canvas.addEventListener('touchmove', (e) => this.onDragMove(e));
     this.canvas.addEventListener('touchend', () => this.onDragEnd());
     this.canvas.addEventListener('touchcancel', () => this.onDragEnd()); // Handle touch interruption
-    this.startRenderLoop();
   }
 
-  startRenderLoop() {
-    if (this.isLooping) {
-      return;
-    }
-    this.isLooping = true;
-
-    const loop = () => {
-      this.render();
-      requestAnimationFrame(loop);
-    };
-    requestAnimationFrame(loop);
-  }
 
   /** @param {MouseEvent | TouchEvent} e */
   onDragStart(e) {
@@ -305,6 +291,37 @@ void main() {
 
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 6);
     this.gl.flush();
+  }
+
+  /**
+   * Runs the shader pipeline for exactly two passes without a loop.
+   * @param {WebGLTexture | null} finalDestinationTexture The texture to render the final output to. If null, renders to the canvas.
+   */
+  #runTwoShaderPasses(finalDestinationTexture) {
+    // Pass 1: Render from sourceTexture to targetTextureA
+    const { program: program0, locations: locations0 } = this.programs[0];
+    this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
+    this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureA, 0);
+    this.#runProgram(program0, locations0, this.sourceTexture);
+
+    // Pass 2: Render from targetTextureA (result of pass 1) to final destination
+    const { program: program1, locations: locations1 } = this.programs[1];
+    if (!finalDestinationTexture) {
+      // Final pass is a preview, so render to the canvas.
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, null);
+      this.#runProgram(program1, locations1, this.targetTextureA);
+    } else {
+      // Final pass is a commit. Render to targetTextureB, then swap targetTextureA and targetTextureB.
+      // This ensures the final result is in targetTextureA, consistent with the render method's commit logic.
+      this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
+      this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, this.gl.COLOR_ATTACHMENT0, this.gl.TEXTURE_2D, this.targetTextureB, 0);
+      this.#runProgram(program1, locations1, this.targetTextureA);
+
+      // Swap targetTextureA and targetTextureB so that targetTextureA holds the final result.
+      // This makes the output consistent with how `_runMultipleShaderPasses` leaves the state
+      // for the `render` method's commit logic.
+      [this.targetTextureA, this.targetTextureB] = [this.targetTextureB, this.targetTextureA];
+    }
   }
 
   // Special case for a single shader pass.  This is tricky when committing a change
@@ -367,14 +384,10 @@ void main() {
   runShaderPasses(finalDestinationTexture) {
     if (this.programs.length === 1) {
       this.#runSingleShaderPass(finalDestinationTexture);
-      return;
-    } else {
+    } else if (this.programs.length === 2) {
+      this.#runTwoShaderPasses(finalDestinationTexture);
+    } else { // For more than two passes, use the generic multiple pass handler
       this.#runMultipleShaderPasses(finalDestinationTexture);
-      if (finalDestinationTexture) {
-        // If we were committing, the final result is in `targetTextureB` (due to the last swap).
-        // We now make it the new sourceTexture.
-        [this.sourceTexture, this.targetTextureB] = [this.targetTextureB, this.sourceTexture];
-      }
     }
   }
 

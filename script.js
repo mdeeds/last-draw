@@ -29,9 +29,32 @@ document.addEventListener('DOMContentLoaded', () => {
   canvas.width = 1024;
   canvas.height = canvas.width;
 
+  const background = createBackground();
 
-  const tool = new EraserTool(canvas);
-  tool.setBackgroundTexture(createBackground());
+  const tools = {
+    'e': new EraserTool(canvas),
+    's': new SmudgeTool(canvas)
+  };
+
+  // Initialize all tools with the background
+  Object.values(tools).forEach(t => t.setBackgroundTexture(background));
+
+  let tool = tools['e']; // Start with the Eraser tool
+
+  document.addEventListener('keydown', (event) => {
+    const newTool = tools[event.key];
+    if (newTool && newTool !== tool) {
+      // Preserve the current canvas state when switching tools
+      newTool.sourceTexture = tool.sourceTexture;
+      tool = newTool;
+      tool.isDirty = true; // Mark as dirty to force a redraw
+    }
+  });
+  const loop = () => {
+    tool.render();
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
 
   const imageUpload = document.getElementById('imageUpload');
 
