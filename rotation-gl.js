@@ -1,15 +1,13 @@
 // @ts-check
 
-import { TwoPointTool } from './two-point-tool.js';
+import { ShaderTool } from './shader-tool.js';
 
-
-export class RotationTool extends TwoPointTool {
-  /**
-   * 
-   * @param {HTMLCanvasElement!} canvas 
-   */
-  constructor(canvas) {
-    const fragmentShaderSource = `#version 300 es
+/**
+ * @param {WebGL2RenderingContext} gl
+ * @returns {ShaderTool}
+ */
+export function createRotationTool(gl) {
+  const fragmentShaderSource = `#version 300 es
 
 precision mediump float;
 uniform sampler2D u_texture;
@@ -77,6 +75,5 @@ void main() {
     fragColor = texture(u_texture, final_uv);
 }
     `;
-    super(canvas, fragmentShaderSource);
-  }
+  return new ShaderTool(gl, fragmentShaderSource);
 }

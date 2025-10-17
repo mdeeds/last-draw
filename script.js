@@ -1,6 +1,9 @@
 import { createEraserTool } from './eraser-gl.js';
 import { createDoubleSmudgeTool, createSmudgeTool } from './smudge-gl.js';
 import { ToolController } from './tool-controller.js';
+import { createArcTool } from './arc-gl.js';
+import { createLineTool } from './line-gl.js';
+import { createRotationTool } from './rotation-gl.js';
 
 function createBackground() {
   const tempCanvas = document.createElement('canvas');
@@ -32,8 +35,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const tools = {
     'e': createEraserTool(controller.gl),
-    'd': createDoubleSmudgeTool(controller.gl),
-    's': createSmudgeTool(controller.gl)
+    's': createSmudgeTool(controller.gl),
+    'a': createArcTool(controller.gl),
+    'l': createLineTool(controller.gl),
+    'r': createRotationTool(controller.gl),
   };
 
   // Initialize all tools with the background

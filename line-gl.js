@@ -1,14 +1,13 @@
 // @ts-check
 
-import { TwoPointTool } from './two-point-tool.js';
+import { ShaderTool } from './shader-tool.js';
 
-export class LineTool extends TwoPointTool {
-  /**
-   * 
-   * @param {HTMLCanvasElement!} canvas 
-   */
-  constructor(canvas) {
-    const fragmentShaderSource = `#version 300 es
+/**
+ * @param {WebGL2RenderingContext} gl
+ * @returns {ShaderTool}
+ */
+export function createLineTool(gl) {
+  const fragmentShaderSource = `#version 300 es
 
 precision mediump float;
 uniform sampler2D u_texture;
@@ -52,6 +51,5 @@ void main() {
     fragColor = mix(texture(u_texture, uv), vec4(0.0, 0.0, 0.0, 1.0), alpha);
 }
     `;
-    super(canvas, fragmentShaderSource);
-  }
+  return new ShaderTool(gl, fragmentShaderSource);
 }
