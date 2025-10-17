@@ -9,16 +9,21 @@
 </head>
 
 <body>
-  <div class="flex flex-col items-center p-4">
-    <h1 class="text-3xl font-bold mb-4 text-white">WebGL Smudge Tool</h1>
-    <canvas id="smudgeCanvas"></canvas>
-    <div class="mt-4">
-      <input type="file" id="imageUpload" accept="image/*">
+  <div class="main-container">
+    <div class="left-rail">
+      <div id="tool-palette" class="p-4"></div>
     </div>
-    <div class="info-box max-w-sm">
-      <p>Click and drag to smudge the checkerboard.</p>
-      <p>The smudge effect is powered by a real-time WebGL fragment shader.</p>
-      <p>Release the mouse button to freeze the effect.</p>
+    <div class="center-content">
+      <h1 class="text-3xl font-bold mb-4 text-white">WebGL Smudge Tool</h1>
+
+      <canvas id="smudgeCanvas"></canvas>
+
+      <div class="mt-4">
+        <input type="file" id="imageUpload" accept="image/*">
+      </div>
+    </div>
+    <div class="right-rail">
+      <!-- Content for the right rail can go here -->
     </div>
   </div>
   <script type="module" src="script.js"></script>

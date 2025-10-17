@@ -33,23 +33,55 @@ document.addEventListener('DOMContentLoaded', () => {
   const controller = new ToolController(canvas);
   const background = createBackground();
 
+  const toolPalette = document.getElementById('tool-palette');
+  if (!toolPalette) {
+    console.error("Tool palette container not found.");
+    return;
+  }
+
   const tools = {
-    'e': createEraserTool(controller.gl),
-    's': createSmudgeTool(controller.gl),
-    'a': createArcTool(controller.gl),
-    'l': createLineTool(controller.gl),
-    'r': createRotationTool(controller.gl),
+    'e': { name: 'Eraser', tool: createEraserTool(controller.gl) },
+    's': { name: 'Smudge', tool: createSmudgeTool(controller.gl) },
+    'a': { name: 'Arc', tool: createArcTool(controller.gl) },
+    'l': { name: 'Line', tool: createLineTool(controller.gl) },
+    'r': { name: 'Rotation', tool: createRotationTool(controller.gl) },
   };
+
+  // Create tool buttons and add to the palette
+  for (const [key, { name, tool }] of Object.entries(tools)) {
+    const toolDiv = document.createElement('div');
+    toolDiv.classList.add('tool-item');
+    toolDiv.textContent = `${name} (${key})`;
+    toolDiv.dataset.toolKey = key; // Store key for event listeners
+    toolPalette.appendChild(toolDiv);
+
+    toolDiv.addEventListener('click', () => {
+      controller.setTool(tool);
+      updateActiveToolUI(key);
+    });
+  }
+
+  function updateActiveToolUI(activeKey) {
+    document.querySelectorAll('.tool-item').forEach(el => {
+      if (el.dataset.toolKey === activeKey) {
+        el.classList.add('active');
+      } else {
+        el.classList.remove('active');
+      }
+    });
+  }
 
   // Initialize all tools with the background
   controller.setBackgroundTexture(background);
 
-  controller.setTool(tools['e']); // Start with the Eraser tool
+  controller.setTool(tools['e'].tool); // Start with the Eraser tool
+  updateActiveToolUI('e');
 
   document.addEventListener('keydown', (event) => {
-    const newTool = tools[event.key];
-    if (newTool && newTool !== controller.activeTool) {
-      controller.setTool(newTool);
+    const newToolInfo = tools[event.key];
+    if (newToolInfo && newToolInfo.tool !== controller.activeTool) {
+      controller.setTool(newToolInfo.tool);
+      updateActiveToolUI(event.key);
     }
   });
   const loop = () => {
