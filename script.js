@@ -1,9 +1,10 @@
 import { createEraserTool } from './eraser-gl.js';
-import { createDoubleSmudgeTool, createSmudgeTool } from './smudge-gl.js';
+import { createSmudgeTool } from './smudge-gl.js';
 import { ToolController } from './tool-controller.js';
 import { createArcTool } from './arc-gl.js';
 import { createLineTool } from './line-gl.js';
 import { createRotationTool } from './rotation-gl.js';
+import { GeminiChat } from './gemini-chat.js';
 
 function createBackground() {
   const tempCanvas = document.createElement('canvas');
@@ -18,8 +19,18 @@ function createBackground() {
   return tempCanvas;
 }
 
+async function initializeChat() {
+  try {
+    const response = await fetch('api.key');
+    const apiKey = await response.text();
+    const chatContainer = document.getElementById('chat-container');
+    new GeminiChat(chatContainer, apiKey.trim());
+  } catch (error) {
+    console.error("Failed to initialize Gemini Chat:", error);
+  }
+}
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   /** @type {HTMLElement | null} */
   const maybeCanvas = document.getElementById('smudgeCanvas');
   if (!maybeCanvas) {
@@ -135,4 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     reader.readAsDataURL(file);
   });
+
+  await initializeChat();
 });

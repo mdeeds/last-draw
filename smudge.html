@@ -12,18 +12,18 @@
   <div class="main-container">
     <div class="left-rail">
       <div id="tool-palette" class="p-4"></div>
+      <div class="mt-4">
+        <input type="file" id="imageUpload" accept="image/*">
+      </div>
     </div>
     <div class="center-content">
       <h1 class="text-3xl font-bold mb-4 text-white">WebGL Smudge Tool</h1>
 
       <canvas id="smudgeCanvas"></canvas>
 
-      <div class="mt-4">
-        <input type="file" id="imageUpload" accept="image/*">
-      </div>
     </div>
     <div class="right-rail">
-      <!-- Content for the right rail can go here -->
+      <div id="chat-container"></div>
     </div>
   </div>
   <script type="module" src="script.js"></script>
